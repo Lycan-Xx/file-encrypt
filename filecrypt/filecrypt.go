@@ -1,41 +1,42 @@
 package filecrypt
 
 import (
-	"golang.org/x/crypto/pbkdf2"
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"crypto/sha1"
+	"encoding/hex"
 	"io"
+	"io/ioutil"
 	"os"
 
-	"github.com/Lycan-Xx/file-encrypt/filecrypt"
-	"golang.org/x/term"
+	"golang.org/x/crypto/pbkdf2"
 )
 
 func Encrypt(source string, password []byte) {
+
 	if _, err := os.Stat(source); os.IsNotExist(err) {
 		panic(err.Error())
 	}
 
-	srcFile, err := os.Open(source)
+	plaintext, err := ioutil.ReadFile(source)
+
 	if err != nil {
 		panic(err.Error())
 	}
 
-	defer srcFile.Close()
-
-	plaintext, err := io.ReadAll(srcFile)
-	if err != nil {
-		panic(err.Error())
-
-	}
 	key := password
-
 	nonce := make([]byte, 12)
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nill {
-		panic(err.Error()())
+
+	// Randomizing the nonce
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		panic(err.Error())
 	}
 
-	dk := pbkdf2.key(key, nonce, 4096, 32, sha1.New)
+	dk := pbkdf2.Key(key, nonce, 4096, 32, sha1.New)
 
-	block, err != aes.NewCipher(dk)
+	block, err := aes.NewCipher(dk)
 	if err != nil {
 		panic(err.Error())
 	}
@@ -46,27 +47,61 @@ func Encrypt(source string, password []byte) {
 	}
 
 	ciphertext := aesgcm.Seal(nil, nonce, plaintext, nil)
+
+	// Append the nonce to the end of file
 	ciphertext = append(ciphertext, nonce...)
 
-	dstFile, err :=os.Create(source)
+	f, err := os.Create(source)
 	if err != nil {
 		panic(err.Error())
-
 	}
-
-	defer dstFile.Close()
-
-	_, err = dstFile.Write(ciphertext)
+	_, err = io.Copy(f, bytes.NewReader(ciphertext))
 	if err != nil {
 		panic(err.Error())
 	}
 }
 
+func Decrypt(source string, password []byte) {
 
+	if _, err := os.Stat(source); os.IsNotExist(err) {
+		panic(err.Error())
+	}
 
-func Decrypt() {
+	ciphertext, err := ioutil.ReadFile(source)
 
+	if err != nil {
+		panic(err.Error())
+	}
+
+	key := password
+	salt := ciphertext[len(ciphertext)-12:]
+	str := hex.EncodeToString(salt)
+
+	nonce, err := hex.DecodeString(str)
+
+	dk := pbkdf2.Key(key, nonce, 4096, 32, sha1.New)
+
+	block, err := aes.NewCipher(dk)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	plaintext, err := aesgcm.Open(nil, nonce, ciphertext[:len(ciphertext)-12], nil)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	f, err := os.Create(source)
+	if err != nil {
+		panic(err.Error())
+	}
+	_, err = io.Copy(f, bytes.NewReader(plaintext))
+	if err != nil {
+		panic(err.Error())
+	}
 }
-
-
-
